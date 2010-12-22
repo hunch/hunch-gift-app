@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Find a gift for a Twitter user{% endblock %}
+
+{% block css %}
+<style>
+#id_find_friend {width: 499px;
+    margin-right: 5px;
+    -moz-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.125);
+    -webkit-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.125);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.125);
+}
+
+#dontfail {
+    margin-top: 12px;
+    padding-bottom: 18px;
+    text-align: center;
+    background-color: #6cc5c3;
+    color: #fff;
+    font-size: 28px;
+    line-height: 36px;
+    font-weight: bold;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+.buttons button.left { margin-right: 0; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="/media/js/app.js"></script>
+<script type="text/javascript">
+    INIT.intro('{{ twitter_url }}');
+</script>
+{% endblock %}
+
+
+{% block content %}
+<div id="alpha" class="clr">
+    <h1 class="tall">Shop for Friends on Twitter</h1>
+
+	<form id="search-friends" action="javascript:void(0)">
+        <div class="buttons">
+	        <input class="left text" type="text" id="id_find_friend" name="find_friend" placeholder="Enter a Twitter name to see recommended gifts" autocomplete="off" /><button type="submit" class="left light search"><span>Search</span></button>
+        </div>
+	</form>
+</div>
+{% endblock %}

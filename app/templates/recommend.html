@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Recommended gifts for {{ twitter_name }}{% endblock %}
+
+{% block css %}
+<style>
+#alpha, #beta { position: relative; float: none; left: 120px; margin-bottom: 18px; }
+#id_find_friend { width: 215px; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="http://hunch.com/media/js/hunch-api.js"></script>
+<script type="text/javascript" src="/media/js/mustache.js"></script>
+<script type="text/javascript" src="/media/js/pagination.js"></script>
+<script type="text/javascript" src="/media/js/app.js"></script>
+<script type="text/javascript">
+    $(function() {
+        INIT.recommend('{{ twitter_name }}', '{{ recommend_url }}', '{{ num_friends }}', '{{ num_predictions }}', '{{ version }}', {limit: {{ page.LIMIT }}, on_sides: {{ page.ON_SIDES }}, on_ends: {{ page.ON_ENDS }}, simple_cutoff: {{ page.SIMPLE_CUTOFF }}, show_end: {{ page.SHOW_END }}, hide_prev: true });
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div id="alpha" class="clr">
+    <div class="media-box">
+        <a class="media" href="#"><img id="friend-img" src="https://api.twitter.com/1/users/profile_image/{{ twitter_name }}/" alt="" /></a>
+        <div class="content">
+	    <h4 id="friend-loaded-header" class="dim">Recommended Gifts For</h4>
+            {# <h4 id="friend-loading-header" class="dim">Loading Recommended Gifts...</h4> #}
+            <h1 id="friend-name">@{{ twitter_name }}</h1>
+        </div>
+    </div>
+    <div class="search-box">
+	    <form id="search-friends" action="javascript:void(0)">
+            <div class="clr">
+		        <input id="id_find_friend" class="text left" type="text" name="find-friend" placeholder="Enter a Twitter name" autocomplete="off"/>
+		        <button type="submit" class="search left light"><span>Search</span></button>
+            </div>
+	    </form>
+    </div>
+</div><!-- /alpha -->
+
+<div id="beta">
+    <div class="products-head pad-side clr">
+        <div id="filters" class="left tall">
+            <span class="strong" style="line-height: 20px;">Price:</span>
+            <select>
+                <option value="0-200">Show All</option>
+                <option value="0-50">$0-50</option>
+                <option value="50-100">$50-100</option>
+                <option value="100-500">$100-500</option>
+                <option value="500-">&gt;$500</option>
+            </select>
+        </div>
+        <div class="pagination right"><!-- done in javascript {% comment %}
+            <span class="prev prev-dim" href="#">prev</span>
+            <em>1</em>
+            <a href="#">2</a>
+            <a href="#">3</a>
+            <span>…</span>
+            <a href="#">6</a>
+            <a class="next" href="#">next</a>
+        {% endcomment %}--></div>
+    </div>
+    <hr />
+
+    <div>
+    <ul id="tags">
+    </ul>
+    </div>
+    <div id="recs" class="activities"></div>
+    <div class="products-bottom clr pad-side">
+	<div class="pagination right"></div>
+    </div>
+
+</div><!-- /beta -->
+
+<div id="gamma">
+    {% comment %}
+    <div class="tight-box">
+        <div class="header small-header">
+            <h3>Confidence Level</h3>
+        </div>
+        <div class="pad-side">
+            <div class="percent" id="confidence">
+                <div class="bar" style="width:5%"></div>
+                <div class="text"><!-- 40% --></div>
+            </div>
+            <p class="dim clr" id="friend-would-say" style="margin-top:9px;">
+                Answer questions to improve gift ideas for <strong>your friend</strong>:
+            </p>
+        </div>
+	<div id="question-wrapper"></div>
+    </div>
+    {% endcomment %}
+</div><!-- /gamma -->
+{% endblock %}
