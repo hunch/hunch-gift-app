@@ -4,7 +4,7 @@ Hunch Gift Application
 This application will display gift recommendations for any Twitter
 user and is an example of what can be built using the [Hunch
 API](http://hunch.com/developers/). The code is almost identical to
-that powering the [Hunch Gift-o-Matic](http://hunch.com/apps/gifts). The
+that powering the [Hunch Gift-o-Matic](http://hunch.com/apps/gifts/). The
 application is built to run either as a standalone
 [Django](http://www.djangoproject.com/) application or using [Google
 App Engine](http://code.google.com/appengine/).
