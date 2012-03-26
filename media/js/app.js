@@ -301,7 +301,7 @@ var INIT = (function($, undefined) {
 </a>\
 </div>\
 <div class="description left" style="margin-left: 10px;">\
-<h3 style="height: 34px; overflow: hidden"><a class="clk-trk" clktype="item" arg1="{{result_id}}" href="{{url}}">{{name}}</a></h3>\
+<h3 style="height: 20px; overflow: hidden"><a class="clk-trk" clktype="item" arg1="{{result_id}}" href="{{url}}">{{name}}</a></h3>\
 <p>\
 <a class="atxt" clktype="item" arg1="{{result_id}}" href="{{url}}">{{description}}</a>\
 </p>\
