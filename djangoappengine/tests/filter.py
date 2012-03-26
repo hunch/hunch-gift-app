@@ -1,12 +1,14 @@
-from .testmodels import FieldsWithOptionsModel, EmailModel, DateTimeModel, OrderedModel
-from ..db.utils import get_cursor
-import datetime, time
-from django.test import TestCase
+from ..db.utils import get_cursor, set_cursor
+from .testmodels import FieldsWithOptionsModel, EmailModel, DateTimeModel, \
+    OrderedModel, BlobModel
+from django.db import models
 from django.db.models import Q
 from django.db.utils import DatabaseError
-from djangoappengine.db.utils import set_cursor
-from djangoappengine.tests.testmodels import BlobModel
+from django.test import TestCase
+from django.utils import unittest
 from google.appengine.api.datastore import Get, Key
+import datetime
+import time
 
 class FilterTest(TestCase):
     floats = [5.3, 2.6, 9.1, 1.58]
@@ -16,13 +18,15 @@ class FilterTest(TestCase):
         datetime.datetime(2010, 12, 31, 23, 59, 59, 999999),
         datetime.datetime(2011, 1, 1, 0, 0, 0, 0),
         datetime.datetime(2013, 7, 28, 22, 30, 20, 50)]
-    
+
     def setUp(self):
         for index, (float, email, datetime_value) in enumerate(zip(FilterTest.floats,
                 FilterTest.emails, FilterTest.datetimes)):
             # ensure distinct times when saving entities
             time.sleep(0.01)
-            self.last_save_time = datetime.datetime.now().time()
+            self.last_save_datetime = datetime.datetime.now()
+            self.last_save_time = self.last_save_datetime.time()
+
             ordered_instance = OrderedModel(priority=index, pk=index + 1)
             ordered_instance.save()
             FieldsWithOptionsModel(floating_point=float,
@@ -65,15 +69,14 @@ class FilterTest(TestCase):
         self.assertEquals(sorted([entity.email for entity in
                             FieldsWithOptionsModel.objects.filter(
                             foreign_key__gt=2)]),
-                            ['rasengan@naruto.com', 'rinnengan@sage.de', ])
+                            ['rasengan@naruto.com', 'rinnengan@sage.de'])
 
         # and with instance
         ordered_instance = OrderedModel.objects.get(priority=1)
         self.assertEquals(sorted([entity.email for entity in
                             FieldsWithOptionsModel.objects.filter(
                             foreign_key__gt=ordered_instance)]),
-                            ['rasengan@naruto.com', 'rinnengan@sage.de', ])
-
+                            ['rasengan@naruto.com', 'rinnengan@sage.de'])
 
     def test_lt(self):
         # test lt on float
@@ -98,7 +101,7 @@ class FilterTest(TestCase):
                             FieldsWithOptionsModel.objects.filter(
                             time__lt=self.last_save_time).order_by('time')],
                             ['app-engine@scholardocs.com', 'sharingan@uchias.com',
-                            'rinnengan@sage.de',])
+                             'rinnengan@sage.de'])
 
         # test ForeignKeys with id
         self.assertEquals(sorted([entity.email for entity in
@@ -112,7 +115,6 @@ class FilterTest(TestCase):
                             FieldsWithOptionsModel.objects.filter(
                             foreign_key__lt=ordered_instance)]),
                             ['app-engine@scholardocs.com', 'sharingan@uchias.com'])
-
 
     def test_gte(self):
         # test gte on float
@@ -178,7 +180,6 @@ class FilterTest(TestCase):
 #        self.assertEquals(FieldsWithOptionsModel.objects.filter(
 #            foreign_key__isnull=True).count(), 1)
 
-
     def test_exclude(self):
         self.assertEquals([entity.email for entity in
                             FieldsWithOptionsModel.objects.all().exclude(
@@ -190,7 +191,7 @@ class FilterTest(TestCase):
         self.assertEquals(sorted([entity.email for entity in
                             FieldsWithOptionsModel.objects.all().exclude(
                             foreign_key__gt=ordered_instance)]),
-                            ['app-engine@scholardocs.com', 'sharingan@uchias.com',])
+                            ['app-engine@scholardocs.com', 'sharingan@uchias.com'])
 
     def test_exclude_pk(self):
         self.assertEquals([entity.pk for entity in
@@ -270,7 +271,7 @@ class FilterTest(TestCase):
         self.assertEquals([entity.email for entity in
                           FieldsWithOptionsModel.objects.all().order_by(
                             'email')[::2]],
-                          ['app-engine@scholardocs.com', 'rinnengan@sage.de',])
+                          ['app-engine@scholardocs.com', 'rinnengan@sage.de'])
 
     def test_cursor(self):
         results = list(FieldsWithOptionsModel.objects.all())
@@ -278,13 +279,12 @@ class FilterTest(TestCase):
         for item in results:
             query = FieldsWithOptionsModel.objects.all()[:1]
             if cursor is not None:
-                set_cursor(query, cursor)
+                query = set_cursor(query, cursor)
             next = query[0]
             self.assertEqual(next.pk, item.pk)
             cursor = get_cursor(query)
-        query = FieldsWithOptionsModel.objects.all()[:1]
-        set_cursor(query, cursor)
-        self.assertEqual(list(query), [])
+        query = set_cursor(FieldsWithOptionsModel.objects.all(), cursor)
+        self.assertEqual(list(query[:1]), [])
 
     def test_Q_objects(self):
         self.assertEquals([entity.email for entity in
@@ -322,6 +322,22 @@ class FilterTest(TestCase):
                            email__in=['app-engine@scholardocs.com',
                                       'rasengan@naruto.com'])],
                           ['app-engine@scholardocs.com', 'rasengan@naruto.com'])
+
+    def test_in_with_order_by(self):
+        class Post(models.Model):
+            writer = models.IntegerField()
+            order = models.IntegerField()
+        Post(writer=1, order=1).save()
+        Post(writer=1, order=2).save()
+        Post(writer=1, order=3).save()
+        Post(writer=2, order=4).save()
+        Post(writer=2, order=5).save()
+        posts = Post.objects.filter(writer__in=[1, 2]).order_by('order')
+        orders = [post.order for post in posts]
+        self.assertEqual(orders, range(1, 6))
+        posts = Post.objects.filter(writer__in=[1, 2]).order_by('-order')
+        orders = [post.order for post in posts]
+        self.assertEqual(orders, range(5, 0, -1))
 
     def test_inequality(self):
         self.assertEquals([entity.email for entity in
@@ -363,24 +379,23 @@ class FilterTest(TestCase):
         self.assertEquals([entity.floating_point for entity in
                           FieldsWithOptionsModel.objects.filter(
                           floating_point__range=(2.6, 9.1)).
-                          order_by('floating_point')], [2.6, 5.3, 9.1,])
+                          order_by('floating_point')], [2.6, 5.3, 9.1])
 
         # test range on pk
         self.assertEquals([entity.pk for entity in
                           FieldsWithOptionsModel.objects.filter(
                           pk__range=('app-engine@scholardocs.com', 'rinnengan@sage.de')).
-                          order_by('pk')], ['app-engine@scholardocs.com',
-                          'rasengan@naruto.com', 'rinnengan@sage.de',])
+                          order_by('pk')],
+                          ['app-engine@scholardocs.com',
+                           'rasengan@naruto.com', 'rinnengan@sage.de'])
 
         # test range on date/datetime objects
-        start_time = datetime.time(self.last_save_time.hour,
-            self.last_save_time.minute - 1, self.last_save_time.second,
-            self.last_save_time.microsecond)
+        start_time = self.last_save_datetime - datetime.timedelta(minutes=1)
         self.assertEquals([entity.email for entity in
                             FieldsWithOptionsModel.objects.filter(
                             time__range=(start_time, self.last_save_time)).order_by('time')],
                             ['app-engine@scholardocs.com', 'sharingan@uchias.com',
-                            'rinnengan@sage.de', 'rasengan@naruto.com',])
+                             'rinnengan@sage.de', 'rasengan@naruto.com'])
 
     def test_date(self):
         # test year on date range boundaries
@@ -388,13 +403,13 @@ class FilterTest(TestCase):
                             DateTimeModel.objects.filter(
                             datetime__year=2010).order_by('datetime')],
                             [datetime.datetime(2010, 1, 1, 0, 0, 0, 0),
-                             datetime.datetime(2010, 12, 31, 23, 59, 59, 999999),])
+                             datetime.datetime(2010, 12, 31, 23, 59, 59, 999999)])
 
         # test year on non boundary date
         self.assertEquals([entity.datetime for entity in
                             DateTimeModel.objects.filter(
                             datetime__year=2013).order_by('datetime')],
-                            [datetime.datetime(2013, 7, 28, 22, 30, 20, 50),])
+                            [datetime.datetime(2013, 7, 28, 22, 30, 20, 50)])
 
     def test_auto_now(self):
         time.sleep(0.1)

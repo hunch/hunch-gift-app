@@ -1,4 +1,6 @@
-from .db_settings import get_indexes
+from .db_settings import get_model_indexes
+from .utils import commit_locked
+from .expressions import ExpressionEvaluator
 
 import datetime
 import sys
@@ -49,6 +51,8 @@ NEGATION_MAP = {
     # TODO: support these filters
     #'exact': '!=', # this might actually become individual '<' and '>' queries
 }
+
+NOT_PROVIDED = object()
 
 def safe_call(func):
     @wraps(func)
@@ -116,16 +120,24 @@ class GAEQuery(NonrelQuery):
             yield self._make_entity(entity)
 
         if executed and not isinstance(query, MultiQuery):
-            self.query._gae_cursor = query.GetCompiledCursor()
+            try:
+                self.query._gae_cursor = query.GetCompiledCursor()
+            except:
+                pass
 
     @safe_call
-    def count(self, limit=None):
+    def count(self, limit=NOT_PROVIDED):
         if self.pk_filters is not None:
             return len(self.get_matching_pk(0, limit))
         if self.excluded_pks:
             return len(list(self.fetch(0, 2000)))
+        # The datastore's Count() method has a 'limit' kwarg, which has
+        # a default value (obviously).  This value can be overridden to anything
+        # you like, and importantly can be overridden to unlimited by passing
+        # a value of None.  Hence *this* method has a default value of
+        # NOT_PROVIDED, rather than a default value of None
         kw = {}
-        if limit is not None:
+        if limit is not NOT_PROVIDED:
             kw['limit'] = limit
         return self._build_query().Count(**kw)
 
@@ -184,11 +196,11 @@ class GAEQuery(NonrelQuery):
                 key_type_error = 'Lookup values on primary keys have to be' \
                                  'a string or an integer.'
                 if lookup_type == 'range':
-                    if isinstance(value,(list, tuple)) and not(isinstance(
-                            value[0], (basestring, int, long)) and \
+                    if isinstance(value, (list, tuple)) and not (
+                            isinstance(value[0], (basestring, int, long)) and
                             isinstance(value[1], (basestring, int, long))):
                         raise DatabaseError(key_type_error)
-                elif not isinstance(value,(basestring, int, long)):
+                elif not isinstance(value, (basestring, int, long)):
                     raise DatabaseError(key_type_error)
                 # for lookup type range we have to deal with a list
                 if lookup_type == 'range':
@@ -267,11 +279,11 @@ class GAEQuery(NonrelQuery):
             value = self.convert_value_for_db(db_type, value)
             if isinstance(value, Text):
                 raise DatabaseError('TextField is not indexed, by default, '
-                                    "so you can't filter on it. "
-                                    'Please add an index definition for the '
-                                    'column "%s" as described here:\n'
+                                    "so you can't filter on it. Please add "
+                                    'an index definition for the column %s '
+                                    'on the model %s.%s as described here:\n'
                                     'http://www.allbuttonspressed.com/blog/django/2010/07/Managing-per-field-indexes-on-App-Engine'
-                                    % column)
+                                    % (column, self.query.model.__module__, self.query.model.__name__))
             if key in query:
                 existing_value = query[key]
                 if isinstance(existing_value, list):
@@ -305,11 +317,11 @@ class GAEQuery(NonrelQuery):
 
     @safe_call
     def _build_query(self):
+        for query in self.gae_query:
+            query.Order(*self.gae_ordering)
         if len(self.gae_query) > 1:
             return MultiQuery(self.gae_query, self.gae_ordering)
-        query = self.gae_query[0]
-        query.Order(*self.gae_ordering)
-        return query
+        return self.gae_query[0]
 
     def get_matching_pk(self, low_mark=0, high_mark=None):
         if not self.pk_filters:
@@ -427,11 +439,13 @@ class SQLCompiler(NonrelCompiler):
         elif db_type == 'longtext':
             # long text fields cannot be indexed on GAE so use GAE's database
             # type Text
-            value = Text((isinstance(value, str) and value.decode('utf-8')) or value)
+            if value is not None:
+                value = Text(value.decode('utf-8') if isinstance(value, str) else value)
         elif db_type == 'text':
-            value = (isinstance(value, str) and value.decode('utf-8')) or value
+            value = value.decode('utf-8') if isinstance(value, str) else value
         elif db_type == 'blob':
-            value = Blob(value)
+            if value is not None:
+                value = Blob(value)
         elif type(value) is str:
             # always store unicode strings
             value = value.decode('utf-8')
@@ -445,8 +459,7 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
     def insert(self, data, return_id=False):
         gae_data = {}
         opts = self.query.get_meta()
-        indexes = get_indexes().get(self.query.model, {})
-        unindexed_fields = indexes.get('unindexed', ())
+        unindexed_fields = get_model_indexes(self.query.model)['unindexed']
         unindexed_cols = [opts.get_field(name).column
                           for name in unindexed_fields]
         kwds = {'unindexed_properties': unindexed_cols}
@@ -469,7 +482,53 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
         return key.id_or_name()
 
 class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
-    pass
+    def execute_sql(self, result_type=MULTI):
+        # modify query to fetch pks only and then execute the query
+        # to get all pks
+        pk = self.query.model._meta.pk.name
+        self.query.add_immediate_loading([pk])
+        pks = [row for row in self.results_iter()]
+        self.update_entities(pks)
+        return len(pks)
+
+    def update_entities(self, pks):
+        for pk in pks:
+            self.update_entity(pk[0])
+
+    @commit_locked
+    def update_entity(self, pk):
+        gae_query = self.build_query()
+        key = create_key(self.query.get_meta().db_table, pk)
+        entity = Get(key)
+        if not gae_query.matches_filters(entity):
+            return
+
+        qn = self.quote_name_unless_alias
+        update_dict = {}
+        for field, o, value in self.query.values:
+            if hasattr(value, 'prepare_database_save'):
+                value = value.prepare_database_save(field)
+            else:
+                value = field.get_db_prep_save(value, connection=self.connection)
+
+            if hasattr(value, "evaluate"):
+                assert not value.negated
+                assert not value.subtree_parents
+                value = ExpressionEvaluator(value, self.query, entity,
+                                                allow_joins=False)
+
+            if hasattr(value, 'as_sql'):
+                # evaluate expression and return the new value
+                val = value.as_sql(qn, self.connection)
+                update_dict[field] = val
+            else:
+                update_dict[field] = value
+
+        for field, value in update_dict.iteritems():
+            db_type = field.db_type(connection=self.connection)
+            entity[qn(field.column)] = self.convert_value_for_db(db_type, value)
+
+        key = Put(entity)
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
     pass

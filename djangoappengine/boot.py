@@ -3,6 +3,7 @@ import os
 import sys
 
 PROJECT_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+DATA_ROOT = os.path.join(PROJECT_DIR, '.gaedata')
 
 # Overrides for os.environ
 env_ext = {'DJANGO_SETTINGS_MODULE': 'settings'}
@@ -50,14 +51,18 @@ def setup_env():
         extra_paths = [sdk_path]
         lib = os.path.join(sdk_path, 'lib')
         # Automatically add all packages in the SDK's lib folder:
-        for dir in os.listdir(lib):
-            path = os.path.join(lib, dir)
+        for name in os.listdir(lib):
+            root = os.path.join(lib, name)
+            subdir = name
             # Package can be under 'lib/<pkg>/<pkg>/' or 'lib/<pkg>/lib/<pkg>/'
-            detect = (os.path.join(path, dir), os.path.join(path, 'lib', dir))
+            detect = (os.path.join(root, subdir), os.path.join(root, 'lib', subdir))
             for path in detect:
-                if os.path.isdir(path) and not dir == 'django':
+                if os.path.isdir(path):
                     extra_paths.append(os.path.dirname(path))
                     break
+            else:
+                if name == 'webapp2':
+                    extra_paths.append(root)
         sys.path = extra_paths + sys.path
         from google.appengine.api import apiproxy_stub_map
 
@@ -66,6 +71,8 @@ def setup_env():
     if have_appserver:
         # App Engine's threading.local is broken
         setup_threading()
+    elif not os.path.exists(DATA_ROOT):
+        os.mkdir(DATA_ROOT)
     setup_logging()
 
     if not have_appserver:
@@ -87,7 +94,9 @@ def find_commands(management_dir):
                 [os.path.join(management_dir, 'commands')]) if not ispkg]
 
 def setup_threading():
-    # XXX: GAE's threading.local doesn't work correctly with subclassing
+    if sys.version_info >= (2, 7):
+        return
+    # XXX: On Python 2.5 GAE's threading.local doesn't work correctly with subclassing
     try:
         from django.utils._threading_local import local
         import threading
@@ -138,9 +147,10 @@ def setup_project():
                          'The subprocess module will not work correctly.')
 
         try:
-            # Allow importing compiler/parser and _ssl modules (for https)
+            # Allow importing compiler/parser, _ssl (for https),
+            # _io for Python 2.7 io support on OS X
             dev_appserver.HardenedModulesHook._WHITE_LIST_C_MODULES.extend(
-                ('parser', '_ssl'))
+                ('parser', '_ssl', '_io'))
         except AttributeError:
             logging.warn('Could not patch modules whitelist. '
                          'The compiler and parser modules will not work and '

@@ -294,14 +294,14 @@ var INIT = (function($, undefined) {
                 }
                 e.twitter_name = twitter_name.replace('tw_', '');
                 e.temp_img = $.imageScaleLoader.defaults.placeholderUrl;
-                $('.activities').append(Mustache.to_html('<div id="item-{{result_id}}" class="item-all"><div class="item-all-inner">\
-<div class="image">\
+                $('.activities').append(Mustache.to_html('<div id="item-{{result_id}}" class="item-all clr" style="padding-bottom:18px;"><div class="item-all-inner">\
+<div class="image left">\
 <a class="media" clktype="item" arg1="{{result_id}}" href="{{url}}">\
 <img height="142" width="142" class="rec-img" fullsource="{{image_url}}" src="{{temp_img}}" />\
 </a>\
 </div>\
-<div class="description">\
-<h3 style="height: 18px; overflow: hidden"><a class="clk-trk" clktype="item" arg1="{{result_id}}" href="{{url}}">{{name}}</a></h3>\
+<div class="description left" style="margin-left: 10px;">\
+<h3 style="height: 34px; overflow: hidden"><a class="clk-trk" clktype="item" arg1="{{result_id}}" href="{{url}}">{{name}}</a></h3>\
 <p>\
 <a class="atxt" clktype="item" arg1="{{result_id}}" href="{{url}}">{{description}}</a>\
 </p>\
@@ -321,7 +321,7 @@ var INIT = (function($, undefined) {
 </div>\
 </div>\
 </div>\
-<div class="feedback">\
+<div class="feedback right">\
 <div class="rate">\
 <button style="margin-right: 3px;" class="light yes{{#liked}}{{active_class}}{{/liked}}" id="yes-{{result_id}}">\
 <span>Like</span>\
@@ -340,12 +340,13 @@ var INIT = (function($, undefined) {
 </div>', e));
                 var good_topic_ids = [];
                 for (var topic_id in e.topic_ids) {
-                    if (e.topic_ids[topic_id].indexOf('hn_t') != -1) {
+                    console.log(e.topic_ids[topic_id]);
+                    if (e.topic_ids[topic_id].indexOf('list_') != -1) {
                         good_topic_ids.push(e.topic_ids[topic_id]);
                     }
                 }
-                var params = {topic_ids: good_topic_ids.join(','), friend_id: twitter_name, limit: 60, key: e.result_id, suppress_http_errors: 1};
-                Hunch.api.getRecommendations(params, populateSimilarItems);
+                var params = {topic_ids: good_topic_ids.join(','), friend_id: twitter_name, limit: 60, sites: 'hn', key: e.result_id, result_id: e.result_id, suppress_http_errors: 1};
+                Hunch.api.getSimilarResults(params, populateSimilarItems);
                 if (e.is_last) {
                     $('.activities').find('img.rec-img').imageScaleLoader({width: 142, height: 142, src: 'fullsource'});
                 }
@@ -356,7 +357,7 @@ var INIT = (function($, undefined) {
     }
 
     function populateSimilarItems(data, textStatus) {
-        var items = data.recommendations;
+        var items = data.recommendations || data.results;
         if (data.recommendations == undefined) {
             console.log(data);
         }

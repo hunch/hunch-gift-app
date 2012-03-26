@@ -23,7 +23,7 @@ Getting started
 1. Download the [Google App Engine Python SDK](http://code.google.com/appengine/downloads.html)
 
 2. Test your app loads the test page
-   * run `python dev_server.sh` (this defaults to running on port 80 which may require root permissions)
+   * run `sh dev_server.sh` (this defaults to running on port 80 which may require root permissions)
    * open a web browser and navigate to [http://localhost](http://localhost)
    * ensure that you see the success page
    * now navigate to [http://localhost/gifts/](http://localhost/gifts/)

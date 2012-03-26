@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.db.utils import DatabaseError
 from django.db.models.fields import NOT_PROVIDED
-from .testmodels import FieldsWithOptionsModel
+from .testmodels import FieldsWithOptionsModel, NullableTextModel
 from google.appengine.api.datastore import Get
 from google.appengine.ext.db import Key
 from google.appengine.api.datastore_types import Text, Category, Email, Link, \
@@ -27,7 +27,7 @@ class FieldOptionsTest(TestCase):
             entity.pk))
         self.assertTrue(gae_entity is not None)
         self.assertEquals(gae_entity.key().name(), u'app-engine@scholardocs.com')
-        
+
         # check if default values are set correctly on the db level,
         # primary_key field is not stored at the db level
         for field in FieldsWithOptionsModel._meta.local_fields:
@@ -77,4 +77,11 @@ class FieldOptionsTest(TestCase):
         # TODO: check db_column option
         # TODO: change the primary key and check if a new instance with the
         # changed primary key will be saved (not in this test class)
-        
+
+    def test_nullable_text(self):
+        # regression test for #48
+        entity = NullableTextModel(text=None)
+        entity.save()
+
+        db_entity = NullableTextModel.objects.get()
+        self.assertEquals(db_entity.text, None)
